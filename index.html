@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Inbound Checker v5.0</title>
+    <title>Inbound Checker v5.0 - Stable</title>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <style>
@@ -13,7 +13,7 @@
 <body>
 <div class="toast-ctr" id="toastCtr"></div>
 <div class="login-screen" id="loginScreen">
-    <div class="login-box"><h2>🔐 Inbound Checker v5.0</h2><p>Multi-User Sync | Fixed v2</p>
+    <div class="login-box"><h2>🔐 Inbound Checker v5.0</h2><p>Stable | Production Ready</p>
         <input type="text" id="loginUser" placeholder="Username"><input type="password" id="loginPass" placeholder="Password">
         <div id="loginStatus" style="display:none;color:#1565c0;margin-top:10px"><span class="loading-text">⏳ Memeriksa...</span></div>
         <div class="login-error" id="loginError"></div><button class="btn-login" id="btnLogin" onclick="doLogin()">🚀 Masuk</button>
@@ -32,7 +32,7 @@
         </div>
         <div class="page" id="page-review">
             <div class="cards"><div class="card"><h4>Total</h4><div class="num" id="t0">0</div></div><div class="card"><h4>Draft</h4><div class="num" id="t1">0</div></div><div class="card"><h4>Proses</h4><div class="num" id="t2">0</div></div><div class="card"><h4>Selesai</h4><div class="num" id="t3">0</div></div></div>
-            <div class="section"><h3>Daftar PO <span style="font-size:10px;color:#888">(<span id="revWh">-</span>)</span></h3><div style="display:flex;gap:10px;margin-bottom:10px"><button class="btn btn-blue btn-xs" onclick="refreshAll()">🔄 Refresh</button></div><div class="tbl-wrap"><table><thead><tr><th>No</th><th>PO</th><th>Vendor</th><th>WH</th><th>Gate</th><th>Tgl</th><th>By</th><th>Status</th><th>⏱</th><th>Aksi</th></tr></thead><tbody id="revBody"></tbody></table></div></div>
+            <div class="section"><h3>Daftar PO <span style="font-size:10px;color:#888">(<span id="revWh">-</span>)</span></h3><div class="tbl-wrap"><table><thead><tr><th>No</th><th>PO</th><th>Vendor</th><th>WH</th><th>Gate</th><th>Tgl</th><th>By</th><th>Status</th><th>⏱</th><th>Aksi</th></tr></thead><tbody id="revBody"></tbody></table></div></div>
         </div>
         <div class="page" id="page-dashboard">
             <div class="dash-controls"><span style="color:#fff;font-size:12px">Filter:</span><button class="active" onclick="setDashWH('')">Semua</button><button onclick="setDashWH('WH BGO')">WH BGO</button><button onclick="setDashWH('WH CBN')">WH CBN</button><button onclick="setDashWH('WH PGS')">WH PGS</button><button onclick="setDashWH('WH SRG')">WH SRG</button><button onclick="setDashWH('WH BIT')">WH BIT</button></div>
@@ -50,55 +50,23 @@
 <script>
 const API_URL='https://script.google.com/macros/s/AKfycbwsNpD8NdY3Eiu0-HAt2kSiTuRQL8soADxxO63Br-321m6ePSTNCFjgxYEEIMqTJDRq/exec';
 const GATES=['Gate 1','Gate 2','Gate 3','Gate 4','Gate 5','Gate 6'];
-const S={uid:'',uname:'',role:'',userWH:'',chk:[],po:null,q:[],online:false,printOrientation:'portrait',loggedIn:false,dashWH:'',syncInterval:null};
+const S={uid:'',uname:'',role:'',userWH:'',chk:[],po:null,q:[],online:false,printOrientation:'portrait',loggedIn:false,dashWH:''};
 let timers={},specCache=null,currentPrintPO=null,dashInterval=null,clockInterval=null,handoverTarget=null,isLookingUp=false,isLoggingIn=false,isAddingToQ=false;
-
-// ============================================
-// BLACKLIST (SAFE VERSION)
-// ============================================
-function getDeletedIds(){
-    try{
-        const raw=localStorage.getItem('deleted_list');
-        if(!raw||raw==='[]'||raw==='')return new Set();
-        const dl=JSON.parse(raw);
-        if(!Array.isArray(dl)||dl.length===0)return new Set();
-        return new Set(dl.filter(d=>d&&d.id).map(d=>d.id));
-    }catch(e){
-        localStorage.setItem('deleted_list','[]');
-        return new Set();
-    }
-}
 
 // ============================================
 // LOGIN
 // ============================================
 async function doLogin(){if(isLoggingIn)return;isLoggingIn=true;const u=document.getElementById('loginUser').value.trim(),p=document.getElementById('loginPass').value.trim(),errEl=document.getElementById('loginError'),stEl=document.getElementById('loginStatus'),btn=document.getElementById('btnLogin');errEl.style.display='none';errEl.textContent='';if(!u||!p){errEl.style.display='block';errEl.textContent='Isi username dan password!';isLoggingIn=false;return;}stEl.style.display='block';btn.disabled=true;try{const r=await fetch(API_URL+'?action=login&username='+encodeURIComponent(u)+'&password='+encodeURIComponent(p));const d=await r.json();if(d&&d.success){S.uid='USR_'+u;S.uname=u;S.role=d.role||'user';S.userWH=d.warehouse||'';S.loggedIn=true;localStorage.setItem('inbound_session_mu',JSON.stringify({uid:S.uid,uname:S.uname,role:S.role,userWH:S.userWH,expiry:Date.now()+28800000}));showApp();toast('✅ Login','Selamat datang, '+u,'ok');}else{errEl.style.display='block';errEl.textContent=d.message||'Username atau password salah!';}}catch(e){errEl.style.display='block';errEl.textContent='Gagal terhubung ke server.';}stEl.style.display='none';btn.disabled=false;isLoggingIn=false;}
-function doLogout(){stopAutoSync();stopTimers();localStorage.removeItem('inbound_session_mu');S.loggedIn=false;document.getElementById('mainApp').classList.remove('show');document.getElementById('loginScreen').style.display='flex';}
-
-// ============================================
-// SYNC
-// ============================================
-async function loadFromServer(){try{const r=await fetch(API_URL+'?action=getQueue&warehouse='+encodeURIComponent(S.userWH||''));const d=await r.json();if(d&&Array.isArray(d)){S.q=d;saveLocal();updRev();updCards();updateDashboardWithData();}}catch(e){console.error('Load error:',e);updRev();updCards();}}
-async function saveToServer(){try{const data=encodeURIComponent(JSON.stringify(S.q));const url=API_URL+'?action=saveQueue&data='+data+'&warehouse='+encodeURIComponent(S.userWH||'');await fetch(url);return true;}catch(e){return false;}}
-async function refreshAll(){await loadFromServer();toast('🔄','Data disegarkan','ok');}
-function startAutoSync(){stopAutoSync();S.syncInterval=setInterval(()=>{loadFromServer();},5000);}
-function stopAutoSync(){if(S.syncInterval){clearInterval(S.syncInterval);S.syncInterval=null;}}
+function doLogout(){stopTimers();localStorage.removeItem('inbound_session_mu');S.loggedIn=false;document.getElementById('mainApp').classList.remove('show');document.getElementById('loginScreen').style.display='flex';}
 
 // ============================================
 // INIT
 // ============================================
-(function(){
-    // RESET BLACKLIST KALAU CORRUPT
-    try{JSON.parse(localStorage.getItem('deleted_list')||'[]');}catch(e){localStorage.setItem('deleted_list','[]');}
-    const saved=localStorage.getItem('queue_local');if(saved){try{S.q=JSON.parse(saved);}catch(e){S.q=[];}}else{S.q=[];}
-    document.querySelectorAll('.nav-item').forEach(i=>{i.addEventListener('click',function(){const t=this.getAttribute('data-tab');if(t)goTab(t);});});
-    const s=localStorage.getItem('inbound_session_mu');if(s){try{const ss=JSON.parse(s);if(ss.expiry>Date.now()){S.uid=ss.uid;S.uname=ss.uname;S.role=ss.role;S.userWH=ss.userWH||'';S.loggedIn=true;showApp();}}catch(e){}}
-    renderDashboardGates();
-})();
-async function showApp(){document.getElementById('loginScreen').style.display='none';document.getElementById('mainApp').classList.add('show');document.getElementById('loggedUser').textContent=S.uname+' ('+S.role+') | '+S.userWH;document.getElementById('revWh').textContent=S.userWH||'Semua';try{await fetch(API_URL+'?action=test');setConn(true);}catch(e){setConn(false);}await loadSpecbookOnce();await loadFromServer();startAutoSync();updRev();updCards();}
+(function(){const saved=localStorage.getItem('queue_local');if(saved){try{S.q=JSON.parse(saved);}catch(e){S.q=[];}}else{S.q=[];}document.querySelectorAll('.nav-item').forEach(i=>{i.addEventListener('click',function(){const t=this.getAttribute('data-tab');if(t)goTab(t);});});const s=localStorage.getItem('inbound_session_mu');if(s){try{const ss=JSON.parse(s);if(ss.expiry>Date.now()){S.uid=ss.uid;S.uname=ss.uname;S.role=ss.role;S.userWH=ss.userWH||'';S.loggedIn=true;showApp();}}catch(e){}}renderDashboardGates();})();
+async function showApp(){document.getElementById('loginScreen').style.display='none';document.getElementById('mainApp').classList.add('show');document.getElementById('loggedUser').textContent=S.uname+' ('+S.role+') | '+S.userWH;document.getElementById('revWh').textContent=S.userWH||'Semua';try{await fetch(API_URL+'?action=test');setConn(true);}catch(e){setConn(false);}await loadSpecbookOnce();updRev();updCards();}
 async function loadSpecbookOnce(){if(specCache)return;try{const r=await fetch(API_URL+'?action=getAllSpecbook');const d=await r.json();if(!d.error)specCache=d;}catch(e){}}
 function setConn(v){S.online=v;document.getElementById('dot').className='dot'+(v?' on':'');document.getElementById('stText').textContent=v?'Online':'Offline';}
-function goTab(t){document.querySelectorAll('.nav-item').forEach(i=>i.classList.toggle('active',i.getAttribute('data-tab')===t));document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));const pg=document.getElementById('page-'+t);if(pg)pg.classList.add('active');stopTimers();if(t==='review'){refreshAll();}if(t==='dashboard'){renderDashboardGates();startDashboardRefresh();}if(t==='history'){loadHist();}}
+function goTab(t){document.querySelectorAll('.nav-item').forEach(i=>i.classList.toggle('active',i.getAttribute('data-tab')===t));document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));const pg=document.getElementById('page-'+t);if(pg)pg.classList.add('active');stopTimers();if(t==='review'){updRev();updCards();}if(t==='dashboard'){renderDashboardGates();startDashboardRefresh();}if(t==='history'){loadHist();}}
 function stopTimers(){if(dashInterval)clearInterval(dashInterval);if(clockInterval)clearInterval(clockInterval);dashInterval=null;clockInterval=null;}
 function saveLocal(){localStorage.setItem('queue_local',JSON.stringify(S.q));}
 function fmt(ms){if(!ms||ms<=0)return'00:00:00';const s=Math.floor(ms/1000),m=Math.floor(s/60),h=Math.floor(m/60);return String(h).padStart(2,'0')+':'+String(m%60).padStart(2,'0')+':'+String(s%60).padStart(2,'0');}
@@ -106,22 +74,8 @@ function fmt(ms){if(!ms||ms<=0)return'00:00:00';const s=Math.floor(ms/1000),m=Ma
 // ============================================
 // REVIEW UI
 // ============================================
-function updRev(){
-    const tbody=document.getElementById('revBody');if(!tbody)return;
-    const deletedIds=getDeletedIds();
-    const visibleQ=S.q.filter(p=>!deletedIds.has(p.id));
-    if(!visibleQ||visibleQ.length===0){tbody.innerHTML='<tr><td colspan="10" style="text-align:center;padding:20px">Tidak ada PO</td></tr>';return;}
-    const s=[...visibleQ].sort((a,b)=>({draft:1,proses:2,selesai:3,handover:4})[a.status]-({draft:1,proses:2,selesai:3,handover:4})[b.status]);
-    tbody.innerHTML=s.map((p,i)=>`<tr><td>${i+1}</td><td><strong>${p.poNumber}</strong></td><td>${p.company}</td><td>${p.warehouse}</td><td>${p.gate||'-'}</td><td>${p.actualDate||p.scheduleDate||'-'}</td><td>${p.userInput||'-'}</td><td><span class="badge badge-${p.status}">${p.status.toUpperCase()}</span></td><td><span id="t${p.id}">${p.duration?fmt(p.duration):(p.startTime&&p.status==='proses'?fmt(Date.now()-new Date(p.startTime).getTime()):'-')}</span></td><td>${p.status==='draft'?`<button class="btn btn-green btn-xs" onclick="startP('${p.id}')">▶ Start</button>`:''}${p.status==='proses'?`<button class="btn btn-teal btn-xs" onclick="finishP('${p.id}')">✓ Finish</button>`:''}${p.status==='selesai'?`<button class="btn btn-purple btn-xs" onclick="openHandover('${p.id}')">📋 Handover</button>`:''}<button class="btn btn-blue btn-xs" onclick="preview('${p.id}')">🖨️</button><button class="btn btn-red btn-xs" onclick="delP('${p.id}')">🗑️</button></td></tr>`).join('');
-}
-function updCards(){
-    const deletedIds=getDeletedIds();
-    const visibleQ=S.q.filter(p=>!deletedIds.has(p.id));
-    const t0=document.getElementById('t0');if(t0)t0.textContent=visibleQ.length;
-    const t1=document.getElementById('t1');if(t1)t1.textContent=visibleQ.filter(p=>p.status==='draft').length;
-    const t2=document.getElementById('t2');if(t2)t2.textContent=visibleQ.filter(p=>p.status==='proses').length;
-    const t3=document.getElementById('t3');if(t3)t3.textContent=visibleQ.filter(p=>p.status==='selesai'||p.status==='handover').length;
-}
+function updRev(){const tbody=document.getElementById('revBody');if(!tbody)return;if(!S.q||S.q.length===0){tbody.innerHTML='<tr><td colspan="10" style="text-align:center;padding:20px">Tidak ada PO</td></tr>';return;}const s=[...S.q].sort((a,b)=>({draft:1,proses:2,selesai:3,handover:4})[a.status]-({draft:1,proses:2,selesai:3,handover:4})[b.status]);tbody.innerHTML=s.map((p,i)=>`<tr><td>${i+1}</td><td><strong>${p.poNumber}</strong></td><td>${p.company}</td><td>${p.warehouse}</td><td>${p.gate||'-'}</td><td>${p.actualDate||p.scheduleDate||'-'}</td><td>${p.userInput||'-'}</td><td><span class="badge badge-${p.status}">${p.status.toUpperCase()}</span></td><td><span id="t${p.id}">${p.duration?fmt(p.duration):(p.startTime&&p.status==='proses'?fmt(Date.now()-new Date(p.startTime).getTime()):'-')}</span></td><td>${p.status==='draft'?`<button class="btn btn-green btn-xs" onclick="startP('${p.id}')">▶ Start</button>`:''}${p.status==='proses'?`<button class="btn btn-teal btn-xs" onclick="finishP('${p.id}')">✓ Finish</button>`:''}${p.status==='selesai'?`<button class="btn btn-purple btn-xs" onclick="openHandover('${p.id}')">📋 Handover</button>`:''}<button class="btn btn-blue btn-xs" onclick="preview('${p.id}')">🖨️</button><button class="btn btn-red btn-xs" onclick="delP('${p.id}')">🗑️</button></td></tr>`).join('');}
+function updCards(){const t0=document.getElementById('t0');if(t0)t0.textContent=S.q.length;const t1=document.getElementById('t1');if(t1)t1.textContent=S.q.filter(p=>p.status==='draft').length;const t2=document.getElementById('t2');if(t2)t2.textContent=S.q.filter(p=>p.status==='proses').length;const t3=document.getElementById('t3');if(t3)t3.textContent=S.q.filter(p=>p.status==='selesai'||p.status==='handover').length;}
 
 // ============================================
 // INPUT
@@ -129,10 +83,10 @@ function updCards(){
 function addChk(){const n=document.getElementById('chkIn').value.trim();if(!n||S.chk.includes(n))return;S.chk.push(n);renderChk();document.getElementById('chkIn').value='';}
 function delChk(i){S.chk.splice(i,1);renderChk();}
 function renderChk(){document.getElementById('chkTags').innerHTML=S.chk.map((c,i)=>`<span class="tag">👤 ${c}<span onclick="delChk(${i})">×</span></span>`).join('');}
-async function addToQ(){if(isAddingToQ)return;const wh=document.getElementById('wh').value,gate=document.getElementById('gate').value,sd=document.getElementById('sd').value,ad=document.getElementById('ad').value||sd;if(!wh||!gate||!sd||!S.chk.length||!S.po){toast('!','Lengkapi semua data','warn');return;}isAddingToQ=true;const btn=document.getElementById('btnAddToQ'),st=document.getElementById('addToQStatus');btn.disabled=true;btn.classList.add('btn-loading');btn.textContent='⏳ Menyimpan...';st.style.display='inline';try{S.q.unshift({id:Date.now().toString(),...S.po,warehouse:wh,gate:gate,scheduleDate:sd,actualDate:ad,checkers:[...S.chk],status:'draft',startTime:null,endTime:null,duration:null,userInput:S.uname,userFinish:'',createdAt:Date.now()});saveLocal();saveToServer();updRev();updCards();resetForm();toast('✅ OK','PO berhasil ditambahkan!','ok');setTimeout(()=>{loadFromServer();},2000);}catch(e){toast('❌','Error: '+e.message,'err');}isAddingToQ=false;btn.disabled=false;btn.classList.remove('btn-loading');btn.textContent='➕ Tambah ke Queue';st.style.display='none';}
-async function startP(id){const p=S.q.find(x=>x.id===id);if(!p)return;p.status='proses';p.startTime=new Date().toISOString();saveLocal();saveToServer();updRev();updCards();timers[id]=setInterval(()=>{const el=document.getElementById('t'+id);if(el)el.textContent=fmt(Date.now()-new Date(p.startTime).getTime());},1000);setTimeout(()=>{loadFromServer();},2000);}
-async function finishP(id){const p=S.q.find(x=>x.id===id);if(!p)return;p.status='selesai';p.endTime=new Date().toISOString();p.duration=new Date(p.endTime)-new Date(p.startTime);p.userFinish=S.uname;if(timers[id]){clearInterval(timers[id]);delete timers[id];}saveLocal();saveToServer();updRev();updCards();toast('✅ Selesai','Klik Handover','ok');setTimeout(()=>{loadFromServer();},2000);}
-function delP(id){if(!confirm('Hapus PO ini?'))return;if(timers[id]){clearInterval(timers[id]);delete timers[id];}let deleted=JSON.parse(localStorage.getItem('deleted_list')||'[]');deleted.push({id:id,time:Date.now()});localStorage.setItem('deleted_list',JSON.stringify(deleted));S.q=S.q.filter(x=>x.id!==id);saveLocal();updRev();updCards();toast('🗑️','PO dihapus!','ok');}
+async function addToQ(){if(isAddingToQ)return;const wh=document.getElementById('wh').value,gate=document.getElementById('gate').value,sd=document.getElementById('sd').value,ad=document.getElementById('ad').value||sd;if(!wh||!gate||!sd||!S.chk.length||!S.po){toast('!','Lengkapi semua data','warn');return;}isAddingToQ=true;const btn=document.getElementById('btnAddToQ'),st=document.getElementById('addToQStatus');btn.disabled=true;btn.classList.add('btn-loading');btn.textContent='⏳ Menyimpan...';st.style.display='inline';try{S.q.unshift({id:Date.now().toString(),...S.po,warehouse:wh,gate:gate,scheduleDate:sd,actualDate:ad,checkers:[...S.chk],status:'draft',startTime:null,endTime:null,duration:null,userInput:S.uname,userFinish:'',createdAt:Date.now()});saveLocal();updRev();updCards();resetForm();toast('✅ OK','PO berhasil ditambahkan!','ok');}catch(e){toast('❌','Error: '+e.message,'err');}isAddingToQ=false;btn.disabled=false;btn.classList.remove('btn-loading');btn.textContent='➕ Tambah ke Queue';st.style.display='none';}
+async function startP(id){const p=S.q.find(x=>x.id===id);if(!p)return;p.status='proses';p.startTime=new Date().toISOString();saveLocal();updRev();updCards();timers[id]=setInterval(()=>{const el=document.getElementById('t'+id);if(el)el.textContent=fmt(Date.now()-new Date(p.startTime).getTime());},1000);}
+async function finishP(id){const p=S.q.find(x=>x.id===id);if(!p)return;p.status='selesai';p.endTime=new Date().toISOString();p.duration=new Date(p.endTime)-new Date(p.startTime);p.userFinish=S.uname;if(timers[id]){clearInterval(timers[id]);delete timers[id];}saveLocal();updRev();updCards();toast('✅ Selesai','Klik Handover','ok');}
+function delP(id){if(!confirm('Hapus PO ini?'))return;if(timers[id]){clearInterval(timers[id]);delete timers[id];}S.q=S.q.filter(x=>x.id!==id);saveLocal();updRev();updCards();toast('🗑️','PO dihapus!','ok');}
 
 // ============================================
 // LOOKUP
@@ -147,14 +101,14 @@ function resetForm(){document.getElementById('poIn').value='';document.getElemen
 function setDashWH(wh){S.dashWH=wh;document.querySelectorAll('.dash-controls button').forEach(b=>b.classList.remove('active'));if(event&&event.target)event.target.classList.add('active');updateDashboardWithData();}
 function startDashboardRefresh(){stopTimers();updateDashboardWithData();dashInterval=setInterval(updateDashboardWithData,5000);clockInterval=setInterval(()=>{const el=document.getElementById('dashClock');if(el)el.textContent=new Date().toLocaleTimeString('id-ID');},1000);}
 function renderDashboardGates(){const grid=document.getElementById('gateGridDash');if(!grid)return;grid.innerHTML=GATES.map(g=>`<div class="gate-card-dash kosong"><div style="display:flex;justify-content:space-between;align-items:center"><span class="gate-name">🚪 ${g}</span><span class="gate-status-dot kosong"></span></div><div class="no-po">KOSONG</div></div>`).join('');}
-async function updateDashboardWithData(){const grid=document.getElementById('gateGridDash');if(!grid)return;await loadFromServer();let fq=S.q.filter(p=>p.status!=='selesai'&&p.status!=='handover');if(S.dashWH)fq=fq.filter(p=>p.warehouse===S.dashWH);const gd={};GATES.forEach(g=>{gd[g]=[];});fq.forEach(p=>{const g=p.gate||'Gate 1';if(gd[g])gd[g].push(p);});grid.innerHTML=GATES.map(g=>{const pos=gd[g],hp=pos.length>0,sc=hp?'terisi':'kosong';if(hp){const tq=pos.reduce((s,p)=>s+(p.products?p.products.reduce((s2,pr)=>s2+(pr.qtyPO||0),0):0),0);const pl=pos.map(p=>{const pq=p.products?p.products.reduce((s,pr)=>s+(pr.qtyPO||0),0):0,b=p.status==='proses'?'⏳':'📋',cn=p.checkers?p.checkers.join(', '):'-';let d=0;if(p.startTime)d=Date.now()-new Date(p.startTime).getTime();return`<div class="gate-po-item"><div><span>${b}</span><span class="po-num">${p.poNumber}</span></div><div style="color:#ccc">${pq.toLocaleString()} pcs</div><div><span class="po-timer">${fmt(d)}</span></div><div class="gate-checker">👤 ${cn} | By: ${p.userInput||'-'}</div></div>`;}).join('');return`<div class="gate-card-dash ${sc}"><div style="display:flex;justify-content:space-between;align-items:center"><span class="gate-name">🚪 ${g}</span><span class="gate-status-dot ${sc}"></span></div><div class="gate-summary">${pos.length} PO | ${tq.toLocaleString()} pcs</div><div class="gate-po-list">${pl}</div></div>`;}return`<div class="gate-card-dash ${sc}"><div style="display:flex;justify-content:space-between;align-items:center"><span class="gate-name">🚪 ${g}</span><span class="gate-status-dot ${sc}"></span></div><div class="no-po">KOSONG</div></div>`;}).join('');const du=document.getElementById('dashUpdate');if(du)du.textContent='Update: '+new Date().toLocaleTimeString('id-ID');}
+async function updateDashboardWithData(){const grid=document.getElementById('gateGridDash');if(!grid)return;let fq=S.q.filter(p=>p.status!=='selesai'&&p.status!=='handover');if(S.dashWH)fq=fq.filter(p=>p.warehouse===S.dashWH);const gd={};GATES.forEach(g=>{gd[g]=[];});fq.forEach(p=>{const g=p.gate||'Gate 1';if(gd[g])gd[g].push(p);});grid.innerHTML=GATES.map(g=>{const pos=gd[g],hp=pos.length>0,sc=hp?'terisi':'kosong';if(hp){const tq=pos.reduce((s,p)=>s+(p.products?p.products.reduce((s2,pr)=>s2+(pr.qtyPO||0),0):0),0);const pl=pos.map(p=>{const pq=p.products?p.products.reduce((s,pr)=>s+(pr.qtyPO||0),0):0,b=p.status==='proses'?'⏳':'📋',cn=p.checkers?p.checkers.join(', '):'-';let d=0;if(p.startTime)d=Date.now()-new Date(p.startTime).getTime();return`<div class="gate-po-item"><div><span>${b}</span><span class="po-num">${p.poNumber}</span></div><div style="color:#ccc">${pq.toLocaleString()} pcs</div><div><span class="po-timer">${fmt(d)}</span></div><div class="gate-checker">👤 ${cn} | By: ${p.userInput||'-'}</div></div>`;}).join('');return`<div class="gate-card-dash ${sc}"><div style="display:flex;justify-content:space-between;align-items:center"><span class="gate-name">🚪 ${g}</span><span class="gate-status-dot ${sc}"></span></div><div class="gate-summary">${pos.length} PO | ${tq.toLocaleString()} pcs</div><div class="gate-po-list">${pl}</div></div>`;}return`<div class="gate-card-dash ${sc}"><div style="display:flex;justify-content:space-between;align-items:center"><span class="gate-name">🚪 ${g}</span><span class="gate-status-dot ${sc}"></span></div><div class="no-po">KOSONG</div></div>`;}).join('');const du=document.getElementById('dashUpdate');if(du)du.textContent='Update: '+new Date().toLocaleTimeString('id-ID');}
 
 // ============================================
 // HANDOVER
 // ============================================
 function openHandover(id){const p=S.q.find(x=>x.id===id);if(!p)return;handoverTarget=p;let html='<table><tr><th>SKU</th><th>Qty</th><th>Exp Date (pisah koma)</th></tr>';p.products.forEach((pr,i)=>{html+=`<tr><td>${pr.sku}</td><td>${pr.qtyPO}</td><td><input type="text" id="exp_sku_${i}" placeholder="25/12/26, 30/12/26" value="${(pr.expDates||[]).join(', ')}" style="width:100%;padding:8px;font-size:13px"></td></tr>`;});html+='</table>';document.getElementById('handoverContent').innerHTML=html;document.getElementById('handoverMod').classList.add('show');}
 function closeHandover(){document.getElementById('handoverMod').classList.remove('show');handoverTarget=null;}
-async function confirmHandover(){if(!handoverTarget)return;const p=handoverTarget;let hasExp=false;p.products.forEach((pr,i)=>{const inp=document.getElementById('exp_sku_'+i);if(inp){pr.expDates=inp.value.split(',').map(d=>d.trim()).filter(d=>d);if(pr.expDates.length>0)hasExp=true;}});if(!hasExp){toast('⚠️','Isi minimal 1 Exp Date!','warn');return;}p.status='handover';p.handoverTime=new Date().toISOString();p.handoverBy=S.uname;saveLocal();saveToServer();updRev();updCards();closeHandover();setTimeout(()=>{loadFromServer();},2000);const fd=new URLSearchParams();fd.append('action','saveRecord');fd.append('data',JSON.stringify({poNumber:p.poNumber||'',company:p.company||'',products:p.products.map(pr=>({sku:pr.sku||'',qtyPO:Number(pr.qtyPO)||0,jumlahKoli:Number(pr.jumlahKoli)||0,tipeKoli:pr.tipeKoli||'-',standarTumpuk:Number(pr.standarTumpuk)||0,expDates:pr.expDates||[]})),warehouse:p.warehouse||'WH BGO',gate:p.gate||'',checkers:p.checkers||[],status:'handover',startTime:p.startTime||'',endTime:p.handoverTime||'',handoverTime:p.handoverTime,handoverBy:S.uname,duration:Number(p.duration)||0,userInput:p.userInput||'',userFinish:p.userFinish||''}));try{const r=await fetch(API_URL,{method:'POST',body:fd});const d=await r.json();if(d.success){toast('✅ Handover Berhasil','PO '+p.poNumber+' telah di-handover','ok');}}catch(e){toast('❌','Gagal simpan record','err');}}
+async function confirmHandover(){if(!handoverTarget)return;const p=handoverTarget;let hasExp=false;p.products.forEach((pr,i)=>{const inp=document.getElementById('exp_sku_'+i);if(inp){pr.expDates=inp.value.split(',').map(d=>d.trim()).filter(d=>d);if(pr.expDates.length>0)hasExp=true;}});if(!hasExp){toast('⚠️','Isi minimal 1 Exp Date!','warn');return;}p.status='handover';p.handoverTime=new Date().toISOString();p.handoverBy=S.uname;saveLocal();updRev();updCards();closeHandover();const fd=new URLSearchParams();fd.append('action','saveRecord');fd.append('data',JSON.stringify({poNumber:p.poNumber||'',company:p.company||'',products:p.products.map(pr=>({sku:pr.sku||'',qtyPO:Number(pr.qtyPO)||0,jumlahKoli:Number(pr.jumlahKoli)||0,tipeKoli:pr.tipeKoli||'-',standarTumpuk:Number(pr.standarTumpuk)||0,expDates:pr.expDates||[]})),warehouse:p.warehouse||'WH BGO',gate:p.gate||'',checkers:p.checkers||[],status:'handover',startTime:p.startTime||'',endTime:p.handoverTime||'',handoverTime:p.handoverTime,handoverBy:S.uname,duration:Number(p.duration)||0,userInput:p.userInput||'',userFinish:p.userFinish||''}));try{const r=await fetch(API_URL,{method:'POST',body:fd});const d=await r.json();if(d.success){toast('✅ Handover Berhasil','PO '+p.poNumber+' telah di-handover','ok');}}catch(e){toast('❌','Gagal simpan record','err');}}
 
 // ============================================
 // HISTORY
