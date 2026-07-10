@@ -60,9 +60,21 @@ async function doLogin(){if(isLoggingIn)return;isLoggingIn=true;const u=document
 function doLogout(){stopAutoSync();stopTimers();localStorage.removeItem('inbound_session_mu');S.loggedIn=false;document.getElementById('mainApp').classList.remove('show');document.getElementById('loginScreen').style.display='flex';}
 
 // ============================================
-// SYNC (FAST - UPDATE UI INSTAN)
+// SYNC (MERGE LOGIC)
 // ============================================
-async function loadFromServer(){try{const r=await fetch(API_URL+'?action=getQueue&warehouse='+encodeURIComponent(S.userWH||''));const d=await r.json();if(d&&Array.isArray(d)){S.q=d;saveLocal();updRev();updCards();updateDashboardWithData();}}catch(e){console.error('Load error:',e);}}
+async function loadFromServer(){
+    try{
+        const r=await fetch(API_URL+'?action=getQueue&warehouse='+encodeURIComponent(S.userWH||''));
+        const d=await r.json();
+        if(d&&Array.isArray(d)){
+            const serverIds=new Set(d.map(item=>item.id));
+            const localOnly=S.q.filter(item=>!serverIds.has(item.id));
+            if(localOnly.length>0){S.q=d.concat(localOnly);saveToServer();}
+            else{S.q=d;}
+            saveLocal();updRev();updCards();updateDashboardWithData();
+        }
+    }catch(e){console.error('Load error:',e);}
+}
 
 async function saveToServer(){try{const fd=new URLSearchParams();fd.append('action','saveQueue');fd.append('data',JSON.stringify(S.q));fd.append('warehouse',S.userWH||'');await fetch(API_URL,{method:'POST',body:fd});return true;}catch(e){try{const data=encodeURIComponent(JSON.stringify(S.q));const url=API_URL+'?action=saveQueue&data='+data+'&warehouse='+encodeURIComponent(S.userWH||'');await fetch(url);return true;}catch(e2){return false;}}}
 
@@ -104,26 +116,24 @@ async function addToQ(){
     btn.disabled=true;btn.classList.add('btn-loading');btn.textContent='⏳ Menyimpan...';st.style.display='inline';
     try{
         S.q.unshift({id:Date.now().toString(),...S.po,warehouse:wh,gate:gate,scheduleDate:sd,actualDate:ad,checkers:[...S.chk],status:'draft',startTime:null,endTime:null,duration:null,userInput:S.uname,userFinish:'',createdAt:Date.now()});
-        saveLocal();
-        const saved=await saveToServer();
+        saveLocal();const saved=await saveToServer();
         updRev();updCards();resetForm();
         if(saved){toast('✅ OK','PO berhasil ditambahkan!','ok');}else{toast('⚠️','PO tersimpan lokal. Akan sync otomatis.','warn');}
-        setTimeout(()=>{loadFromServer();},1000);
+        setTimeout(()=>{loadFromServer();},1500);
     }catch(e){toast('❌','Error: '+e.message,'err');}
     isAddingToQ=false;btn.disabled=false;btn.classList.remove('btn-loading');btn.textContent='➕ Tambah ke Queue';st.style.display='none';
 }
 
-async function startP(id){const p=S.q.find(x=>x.id===id);if(!p)return;p.status='proses';p.startTime=new Date().toISOString();saveLocal();saveToServer();updRev();updCards();timers[id]=setInterval(()=>{const el=document.getElementById('t'+id);if(el)el.textContent=fmt(Date.now()-new Date(p.startTime).getTime());},1000);setTimeout(()=>{loadFromServer();},1000);}
-async function finishP(id){const p=S.q.find(x=>x.id===id);if(!p)return;p.status='selesai';p.endTime=new Date().toISOString();p.duration=new Date(p.endTime)-new Date(p.startTime);p.userFinish=S.uname;if(timers[id]){clearInterval(timers[id]);delete timers[id];}saveLocal();saveToServer();updRev();updCards();toast('✅ Selesai','Klik Handover','ok');setTimeout(()=>{loadFromServer();},1000);}
+async function startP(id){const p=S.q.find(x=>x.id===id);if(!p)return;p.status='proses';p.startTime=new Date().toISOString();saveLocal();saveToServer();updRev();updCards();timers[id]=setInterval(()=>{const el=document.getElementById('t'+id);if(el)el.textContent=fmt(Date.now()-new Date(p.startTime).getTime());},1000);setTimeout(()=>{loadFromServer();},1500);}
+async function finishP(id){const p=S.q.find(x=>x.id===id);if(!p)return;p.status='selesai';p.endTime=new Date().toISOString();p.duration=new Date(p.endTime)-new Date(p.startTime);p.userFinish=S.uname;if(timers[id]){clearInterval(timers[id]);delete timers[id];}saveLocal();saveToServer();updRev();updCards();toast('✅ Selesai','Klik Handover','ok');setTimeout(()=>{loadFromServer();},1500);}
 
-// FIX: Tombol hapus berfungsi
+// FIX: Hapus langsung, tanpa load ulang
 function delP(id){
     if(!confirm('Hapus PO ini?'))return;
     if(timers[id]){clearInterval(timers[id]);delete timers[id];}
     S.q=S.q.filter(x=>x.id!==id);
     saveLocal();saveToServer();
     updRev();updCards();toast('🗑️','PO dihapus','ok');
-    setTimeout(()=>{loadFromServer();},1000);
 }
 
 // ============================================
@@ -146,7 +156,7 @@ async function updateDashboardWithData(){const grid=document.getElementById('gat
 // ============================================
 function openHandover(id){const p=S.q.find(x=>x.id===id);if(!p)return;handoverTarget=p;let html='<table><tr><th>SKU</th><th>Qty</th><th>Exp Date (pisah koma)</th></tr>';p.products.forEach((pr,i)=>{html+=`<tr><td>${pr.sku}</td><td>${pr.qtyPO}</td><td><input type="text" id="exp_sku_${i}" placeholder="25/12/26, 30/12/26" value="${(pr.expDates||[]).join(', ')}" style="width:100%;padding:8px;font-size:13px"></td></tr>`;});html+='</table>';document.getElementById('handoverContent').innerHTML=html;document.getElementById('handoverMod').classList.add('show');}
 function closeHandover(){document.getElementById('handoverMod').classList.remove('show');handoverTarget=null;}
-async function confirmHandover(){if(!handoverTarget)return;const p=handoverTarget;let hasExp=false;p.products.forEach((pr,i)=>{const inp=document.getElementById('exp_sku_'+i);if(inp){pr.expDates=inp.value.split(',').map(d=>d.trim()).filter(d=>d);if(pr.expDates.length>0)hasExp=true;}});if(!hasExp){toast('⚠️','Isi minimal 1 Exp Date!','warn');return;}p.status='handover';p.handoverTime=new Date().toISOString();p.handoverBy=S.uname;saveLocal();saveToServer();updRev();updCards();closeHandover();setTimeout(()=>{loadFromServer();},1000);const fd=new URLSearchParams();fd.append('action','saveRecord');fd.append('data',JSON.stringify({poNumber:p.poNumber||'',company:p.company||'',products:p.products.map(pr=>({sku:pr.sku||'',qtyPO:Number(pr.qtyPO)||0,jumlahKoli:Number(pr.jumlahKoli)||0,tipeKoli:pr.tipeKoli||'-',standarTumpuk:Number(pr.standarTumpuk)||0,expDates:pr.expDates||[]})),warehouse:p.warehouse||'WH BGO',gate:p.gate||'',checkers:p.checkers||[],status:'handover',startTime:p.startTime||'',endTime:p.handoverTime||'',handoverTime:p.handoverTime,handoverBy:S.uname,duration:Number(p.duration)||0,userInput:p.userInput||'',userFinish:p.userFinish||''}));try{const r=await fetch(API_URL,{method:'POST',body:fd});const d=await r.json();if(d.success){toast('✅ Handover Berhasil','PO '+p.poNumber+' telah di-handover','ok');}}catch(e){toast('❌','Gagal simpan record','err');}}
+async function confirmHandover(){if(!handoverTarget)return;const p=handoverTarget;let hasExp=false;p.products.forEach((pr,i)=>{const inp=document.getElementById('exp_sku_'+i);if(inp){pr.expDates=inp.value.split(',').map(d=>d.trim()).filter(d=>d);if(pr.expDates.length>0)hasExp=true;}});if(!hasExp){toast('⚠️','Isi minimal 1 Exp Date!','warn');return;}p.status='handover';p.handoverTime=new Date().toISOString();p.handoverBy=S.uname;saveLocal();saveToServer();updRev();updCards();closeHandover();setTimeout(()=>{loadFromServer();},1500);const fd=new URLSearchParams();fd.append('action','saveRecord');fd.append('data',JSON.stringify({poNumber:p.poNumber||'',company:p.company||'',products:p.products.map(pr=>({sku:pr.sku||'',qtyPO:Number(pr.qtyPO)||0,jumlahKoli:Number(pr.jumlahKoli)||0,tipeKoli:pr.tipeKoli||'-',standarTumpuk:Number(pr.standarTumpuk)||0,expDates:pr.expDates||[]})),warehouse:p.warehouse||'WH BGO',gate:p.gate||'',checkers:p.checkers||[],status:'handover',startTime:p.startTime||'',endTime:p.handoverTime||'',handoverTime:p.handoverTime,handoverBy:S.uname,duration:Number(p.duration)||0,userInput:p.userInput||'',userFinish:p.userFinish||''}));try{const r=await fetch(API_URL,{method:'POST',body:fd});const d=await r.json();if(d.success){toast('✅ Handover Berhasil','PO '+p.poNumber+' telah di-handover','ok');}}catch(e){toast('❌','Gagal simpan record','err');}}
 
 // ============================================
 // HISTORY
