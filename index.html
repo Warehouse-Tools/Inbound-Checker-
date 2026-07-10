@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Inbound Checker v5.0 - Stable</title>
+    <title>Inbound Checker v5.0</title>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <style>
@@ -13,7 +13,7 @@
 <body>
 <div class="toast-ctr" id="toastCtr"></div>
 <div class="login-screen" id="loginScreen">
-    <div class="login-box"><h2>🔐 Inbound Checker v5.0</h2><p>Stable | Production Ready</p>
+    <div class="login-box"><h2>🔐 Inbound Checker v5.0</h2><p>Multi-User | Sync 5 detik</p>
         <input type="text" id="loginUser" placeholder="Username"><input type="password" id="loginPass" placeholder="Password">
         <div id="loginStatus" style="display:none;color:#1565c0;margin-top:10px"><span class="loading-text">⏳ Memeriksa...</span></div>
         <div class="login-error" id="loginError"></div><button class="btn-login" id="btnLogin" onclick="doLogin()">🚀 Masuk</button>
@@ -32,7 +32,7 @@
         </div>
         <div class="page" id="page-review">
             <div class="cards"><div class="card"><h4>Total</h4><div class="num" id="t0">0</div></div><div class="card"><h4>Draft</h4><div class="num" id="t1">0</div></div><div class="card"><h4>Proses</h4><div class="num" id="t2">0</div></div><div class="card"><h4>Selesai</h4><div class="num" id="t3">0</div></div></div>
-            <div class="section"><h3>Daftar PO <span style="font-size:10px;color:#888">(<span id="revWh">-</span>)</span></h3><div class="tbl-wrap"><table><thead><tr><th>No</th><th>PO</th><th>Vendor</th><th>WH</th><th>Gate</th><th>Tgl</th><th>By</th><th>Status</th><th>⏱</th><th>Aksi</th></tr></thead><tbody id="revBody"></tbody></table></div></div>
+            <div class="section"><h3>Daftar PO <span style="font-size:10px;color:#888">(<span id="revWh">-</span>)</span></h3><div style="display:flex;gap:10px;margin-bottom:10px"><button class="btn btn-blue btn-xs" onclick="loadFromServer()">🔄 Sync Now</button></div><div class="tbl-wrap"><table><thead><tr><th>No</th><th>PO</th><th>Vendor</th><th>WH</th><th>Gate</th><th>Tgl</th><th>By</th><th>Status</th><th>⏱</th><th>Aksi</th></tr></thead><tbody id="revBody"></tbody></table></div></div>
         </div>
         <div class="page" id="page-dashboard">
             <div class="dash-controls"><span style="color:#fff;font-size:12px">Filter:</span><button class="active" onclick="setDashWH('')">Semua</button><button onclick="setDashWH('WH BGO')">WH BGO</button><button onclick="setDashWH('WH CBN')">WH CBN</button><button onclick="setDashWH('WH PGS')">WH PGS</button><button onclick="setDashWH('WH SRG')">WH SRG</button><button onclick="setDashWH('WH BIT')">WH BIT</button></div>
@@ -50,23 +50,31 @@
 <script>
 const API_URL='https://script.google.com/macros/s/AKfycbwsNpD8NdY3Eiu0-HAt2kSiTuRQL8soADxxO63Br-321m6ePSTNCFjgxYEEIMqTJDRq/exec';
 const GATES=['Gate 1','Gate 2','Gate 3','Gate 4','Gate 5','Gate 6'];
-const S={uid:'',uname:'',role:'',userWH:'',chk:[],po:null,q:[],online:false,printOrientation:'portrait',loggedIn:false,dashWH:''};
+const S={uid:'',uname:'',role:'',userWH:'',chk:[],po:null,q:[],online:false,printOrientation:'portrait',loggedIn:false,dashWH:'',syncInterval:null};
 let timers={},specCache=null,currentPrintPO=null,dashInterval=null,clockInterval=null,handoverTarget=null,isLookingUp=false,isLoggingIn=false,isAddingToQ=false;
 
 // ============================================
 // LOGIN
 // ============================================
 async function doLogin(){if(isLoggingIn)return;isLoggingIn=true;const u=document.getElementById('loginUser').value.trim(),p=document.getElementById('loginPass').value.trim(),errEl=document.getElementById('loginError'),stEl=document.getElementById('loginStatus'),btn=document.getElementById('btnLogin');errEl.style.display='none';errEl.textContent='';if(!u||!p){errEl.style.display='block';errEl.textContent='Isi username dan password!';isLoggingIn=false;return;}stEl.style.display='block';btn.disabled=true;try{const r=await fetch(API_URL+'?action=login&username='+encodeURIComponent(u)+'&password='+encodeURIComponent(p));const d=await r.json();if(d&&d.success){S.uid='USR_'+u;S.uname=u;S.role=d.role||'user';S.userWH=d.warehouse||'';S.loggedIn=true;localStorage.setItem('inbound_session_mu',JSON.stringify({uid:S.uid,uname:S.uname,role:S.role,userWH:S.userWH,expiry:Date.now()+28800000}));showApp();toast('✅ Login','Selamat datang, '+u,'ok');}else{errEl.style.display='block';errEl.textContent=d.message||'Username atau password salah!';}}catch(e){errEl.style.display='block';errEl.textContent='Gagal terhubung ke server.';}stEl.style.display='none';btn.disabled=false;isLoggingIn=false;}
-function doLogout(){stopTimers();localStorage.removeItem('inbound_session_mu');S.loggedIn=false;document.getElementById('mainApp').classList.remove('show');document.getElementById('loginScreen').style.display='flex';}
+function doLogout(){stopAutoSync();stopTimers();localStorage.removeItem('inbound_session_mu');S.loggedIn=false;document.getElementById('mainApp').classList.remove('show');document.getElementById('loginScreen').style.display='flex';}
+
+// ============================================
+// SYNC - SIMPLE
+// ============================================
+async function loadFromServer(){try{const r=await fetch(API_URL+'?action=getQueue&warehouse='+encodeURIComponent(S.userWH||''));const d=await r.json();if(d&&Array.isArray(d)&&d.length>0){S.q=d;saveLocal();updRev();updCards();updateDashboardWithData();toast('🔄','Data disinkronkan','ok');}else{toast('📭','Server kosong','warn');}}catch(e){toast('❌','Gagal sync','err');}}
+async function saveToServer(){try{const data=encodeURIComponent(JSON.stringify(S.q));const url=API_URL+'?action=saveQueue&data='+data+'&warehouse='+encodeURIComponent(S.userWH||'');await fetch(url);}catch(e){}}
+function startAutoSync(){stopAutoSync();S.syncInterval=setInterval(()=>{loadFromServer();},5000);}
+function stopAutoSync(){if(S.syncInterval){clearInterval(S.syncInterval);S.syncInterval=null;}}
 
 // ============================================
 // INIT
 // ============================================
 (function(){const saved=localStorage.getItem('queue_local');if(saved){try{S.q=JSON.parse(saved);}catch(e){S.q=[];}}else{S.q=[];}document.querySelectorAll('.nav-item').forEach(i=>{i.addEventListener('click',function(){const t=this.getAttribute('data-tab');if(t)goTab(t);});});const s=localStorage.getItem('inbound_session_mu');if(s){try{const ss=JSON.parse(s);if(ss.expiry>Date.now()){S.uid=ss.uid;S.uname=ss.uname;S.role=ss.role;S.userWH=ss.userWH||'';S.loggedIn=true;showApp();}}catch(e){}}renderDashboardGates();})();
-async function showApp(){document.getElementById('loginScreen').style.display='none';document.getElementById('mainApp').classList.add('show');document.getElementById('loggedUser').textContent=S.uname+' ('+S.role+') | '+S.userWH;document.getElementById('revWh').textContent=S.userWH||'Semua';try{await fetch(API_URL+'?action=test');setConn(true);}catch(e){setConn(false);}await loadSpecbookOnce();updRev();updCards();}
+async function showApp(){document.getElementById('loginScreen').style.display='none';document.getElementById('mainApp').classList.add('show');document.getElementById('loggedUser').textContent=S.uname+' ('+S.role+') | '+S.userWH;document.getElementById('revWh').textContent=S.userWH||'Semua';try{await fetch(API_URL+'?action=test');setConn(true);}catch(e){setConn(false);}await loadSpecbookOnce();startAutoSync();updRev();updCards();}
 async function loadSpecbookOnce(){if(specCache)return;try{const r=await fetch(API_URL+'?action=getAllSpecbook');const d=await r.json();if(!d.error)specCache=d;}catch(e){}}
 function setConn(v){S.online=v;document.getElementById('dot').className='dot'+(v?' on':'');document.getElementById('stText').textContent=v?'Online':'Offline';}
-function goTab(t){document.querySelectorAll('.nav-item').forEach(i=>i.classList.toggle('active',i.getAttribute('data-tab')===t));document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));const pg=document.getElementById('page-'+t);if(pg)pg.classList.add('active');stopTimers();if(t==='review'){updRev();updCards();}if(t==='dashboard'){renderDashboardGates();startDashboardRefresh();}if(t==='history'){loadHist();}}
+function goTab(t){document.querySelectorAll('.nav-item').forEach(i=>i.classList.toggle('active',i.getAttribute('data-tab')===t));document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));const pg=document.getElementById('page-'+t);if(pg)pg.classList.add('active');stopTimers();if(t==='review'){loadFromServer();}if(t==='dashboard'){renderDashboardGates();startDashboardRefresh();}if(t==='history'){loadHist();}}
 function stopTimers(){if(dashInterval)clearInterval(dashInterval);if(clockInterval)clearInterval(clockInterval);dashInterval=null;clockInterval=null;}
 function saveLocal(){localStorage.setItem('queue_local',JSON.stringify(S.q));}
 function fmt(ms){if(!ms||ms<=0)return'00:00:00';const s=Math.floor(ms/1000),m=Math.floor(s/60),h=Math.floor(m/60);return String(h).padStart(2,'0')+':'+String(m%60).padStart(2,'0')+':'+String(s%60).padStart(2,'0');}
@@ -83,10 +91,10 @@ function updCards(){const t0=document.getElementById('t0');if(t0)t0.textContent=
 function addChk(){const n=document.getElementById('chkIn').value.trim();if(!n||S.chk.includes(n))return;S.chk.push(n);renderChk();document.getElementById('chkIn').value='';}
 function delChk(i){S.chk.splice(i,1);renderChk();}
 function renderChk(){document.getElementById('chkTags').innerHTML=S.chk.map((c,i)=>`<span class="tag">👤 ${c}<span onclick="delChk(${i})">×</span></span>`).join('');}
-async function addToQ(){if(isAddingToQ)return;const wh=document.getElementById('wh').value,gate=document.getElementById('gate').value,sd=document.getElementById('sd').value,ad=document.getElementById('ad').value||sd;if(!wh||!gate||!sd||!S.chk.length||!S.po){toast('!','Lengkapi semua data','warn');return;}isAddingToQ=true;const btn=document.getElementById('btnAddToQ'),st=document.getElementById('addToQStatus');btn.disabled=true;btn.classList.add('btn-loading');btn.textContent='⏳ Menyimpan...';st.style.display='inline';try{S.q.unshift({id:Date.now().toString(),...S.po,warehouse:wh,gate:gate,scheduleDate:sd,actualDate:ad,checkers:[...S.chk],status:'draft',startTime:null,endTime:null,duration:null,userInput:S.uname,userFinish:'',createdAt:Date.now()});saveLocal();updRev();updCards();resetForm();toast('✅ OK','PO berhasil ditambahkan!','ok');}catch(e){toast('❌','Error: '+e.message,'err');}isAddingToQ=false;btn.disabled=false;btn.classList.remove('btn-loading');btn.textContent='➕ Tambah ke Queue';st.style.display='none';}
-async function startP(id){const p=S.q.find(x=>x.id===id);if(!p)return;p.status='proses';p.startTime=new Date().toISOString();saveLocal();updRev();updCards();timers[id]=setInterval(()=>{const el=document.getElementById('t'+id);if(el)el.textContent=fmt(Date.now()-new Date(p.startTime).getTime());},1000);}
-async function finishP(id){const p=S.q.find(x=>x.id===id);if(!p)return;p.status='selesai';p.endTime=new Date().toISOString();p.duration=new Date(p.endTime)-new Date(p.startTime);p.userFinish=S.uname;if(timers[id]){clearInterval(timers[id]);delete timers[id];}saveLocal();updRev();updCards();toast('✅ Selesai','Klik Handover','ok');}
-function delP(id){if(!confirm('Hapus PO ini?'))return;if(timers[id]){clearInterval(timers[id]);delete timers[id];}S.q=S.q.filter(x=>x.id!==id);saveLocal();updRev();updCards();toast('🗑️','PO dihapus!','ok');}
+async function addToQ(){if(isAddingToQ)return;const wh=document.getElementById('wh').value,gate=document.getElementById('gate').value,sd=document.getElementById('sd').value,ad=document.getElementById('ad').value||sd;if(!wh||!gate||!sd||!S.chk.length||!S.po){toast('!','Lengkapi semua data','warn');return;}isAddingToQ=true;const btn=document.getElementById('btnAddToQ'),st=document.getElementById('addToQStatus');btn.disabled=true;btn.classList.add('btn-loading');btn.textContent='⏳ Menyimpan...';st.style.display='inline';try{S.q.unshift({id:Date.now().toString(),...S.po,warehouse:wh,gate:gate,scheduleDate:sd,actualDate:ad,checkers:[...S.chk],status:'draft',startTime:null,endTime:null,duration:null,userInput:S.uname,userFinish:'',createdAt:Date.now()});saveLocal();saveToServer();updRev();updCards();resetForm();toast('✅ OK','PO ditambahkan!','ok');}catch(e){toast('❌','Error: '+e.message,'err');}isAddingToQ=false;btn.disabled=false;btn.classList.remove('btn-loading');btn.textContent='➕ Tambah ke Queue';st.style.display='none';}
+async function startP(id){const p=S.q.find(x=>x.id===id);if(!p)return;p.status='proses';p.startTime=new Date().toISOString();saveLocal();saveToServer();updRev();updCards();timers[id]=setInterval(()=>{const el=document.getElementById('t'+id);if(el)el.textContent=fmt(Date.now()-new Date(p.startTime).getTime());},1000);}
+async function finishP(id){const p=S.q.find(x=>x.id===id);if(!p)return;p.status='selesai';p.endTime=new Date().toISOString();p.duration=new Date(p.endTime)-new Date(p.startTime);p.userFinish=S.uname;if(timers[id]){clearInterval(timers[id]);delete timers[id];}saveLocal();saveToServer();updRev();updCards();toast('✅ Selesai','Klik Handover','ok');}
+function delP(id){if(!confirm('Hapus PO ini?'))return;if(timers[id]){clearInterval(timers[id]);delete timers[id];}S.q=S.q.filter(x=>x.id!==id);saveLocal();saveToServer();updRev();updCards();toast('🗑️','PO dihapus!','ok');}
 
 // ============================================
 // LOOKUP
@@ -108,7 +116,7 @@ async function updateDashboardWithData(){const grid=document.getElementById('gat
 // ============================================
 function openHandover(id){const p=S.q.find(x=>x.id===id);if(!p)return;handoverTarget=p;let html='<table><tr><th>SKU</th><th>Qty</th><th>Exp Date (pisah koma)</th></tr>';p.products.forEach((pr,i)=>{html+=`<tr><td>${pr.sku}</td><td>${pr.qtyPO}</td><td><input type="text" id="exp_sku_${i}" placeholder="25/12/26, 30/12/26" value="${(pr.expDates||[]).join(', ')}" style="width:100%;padding:8px;font-size:13px"></td></tr>`;});html+='</table>';document.getElementById('handoverContent').innerHTML=html;document.getElementById('handoverMod').classList.add('show');}
 function closeHandover(){document.getElementById('handoverMod').classList.remove('show');handoverTarget=null;}
-async function confirmHandover(){if(!handoverTarget)return;const p=handoverTarget;let hasExp=false;p.products.forEach((pr,i)=>{const inp=document.getElementById('exp_sku_'+i);if(inp){pr.expDates=inp.value.split(',').map(d=>d.trim()).filter(d=>d);if(pr.expDates.length>0)hasExp=true;}});if(!hasExp){toast('⚠️','Isi minimal 1 Exp Date!','warn');return;}p.status='handover';p.handoverTime=new Date().toISOString();p.handoverBy=S.uname;saveLocal();updRev();updCards();closeHandover();const fd=new URLSearchParams();fd.append('action','saveRecord');fd.append('data',JSON.stringify({poNumber:p.poNumber||'',company:p.company||'',products:p.products.map(pr=>({sku:pr.sku||'',qtyPO:Number(pr.qtyPO)||0,jumlahKoli:Number(pr.jumlahKoli)||0,tipeKoli:pr.tipeKoli||'-',standarTumpuk:Number(pr.standarTumpuk)||0,expDates:pr.expDates||[]})),warehouse:p.warehouse||'WH BGO',gate:p.gate||'',checkers:p.checkers||[],status:'handover',startTime:p.startTime||'',endTime:p.handoverTime||'',handoverTime:p.handoverTime,handoverBy:S.uname,duration:Number(p.duration)||0,userInput:p.userInput||'',userFinish:p.userFinish||''}));try{const r=await fetch(API_URL,{method:'POST',body:fd});const d=await r.json();if(d.success){toast('✅ Handover Berhasil','PO '+p.poNumber+' telah di-handover','ok');}}catch(e){toast('❌','Gagal simpan record','err');}}
+async function confirmHandover(){if(!handoverTarget)return;const p=handoverTarget;let hasExp=false;p.products.forEach((pr,i)=>{const inp=document.getElementById('exp_sku_'+i);if(inp){pr.expDates=inp.value.split(',').map(d=>d.trim()).filter(d=>d);if(pr.expDates.length>0)hasExp=true;}});if(!hasExp){toast('⚠️','Isi minimal 1 Exp Date!','warn');return;}p.status='handover';p.handoverTime=new Date().toISOString();p.handoverBy=S.uname;saveLocal();saveToServer();updRev();updCards();closeHandover();const fd=new URLSearchParams();fd.append('action','saveRecord');fd.append('data',JSON.stringify({poNumber:p.poNumber||'',company:p.company||'',products:p.products.map(pr=>({sku:pr.sku||'',qtyPO:Number(pr.qtyPO)||0,jumlahKoli:Number(pr.jumlahKoli)||0,tipeKoli:pr.tipeKoli||'-',standarTumpuk:Number(pr.standarTumpuk)||0,expDates:pr.expDates||[]})),warehouse:p.warehouse||'WH BGO',gate:p.gate||'',checkers:p.checkers||[],status:'handover',startTime:p.startTime||'',endTime:p.handoverTime||'',handoverTime:p.handoverTime,handoverBy:S.uname,duration:Number(p.duration)||0,userInput:p.userInput||'',userFinish:p.userFinish||''}));try{const r=await fetch(API_URL,{method:'POST',body:fd});const d=await r.json();if(d.success){toast('✅ Handover Berhasil','PO '+p.poNumber+' telah di-handover','ok');}}catch(e){toast('❌','Gagal simpan record','err');}}
 
 // ============================================
 // HISTORY
