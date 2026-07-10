@@ -60,10 +60,13 @@ async function doLogin(){if(isLoggingIn)return;isLoggingIn=true;const u=document
 function doLogout(){stopAutoSync();stopTimers();localStorage.removeItem('inbound_session_mu');S.loggedIn=false;document.getElementById('mainApp').classList.remove('show');document.getElementById('loginScreen').style.display='flex';}
 
 // ============================================
-// SIMPLE SYNC (SERVER = SOURCE OF TRUTH)
+// SIMPLE SYNC
 // ============================================
 async function loadFromServer(){try{const r=await fetch(API_URL+'?action=getQueue&warehouse='+encodeURIComponent(S.userWH||''));const d=await r.json();if(d&&Array.isArray(d)){S.q=d;saveLocal();updRev();updCards();updateDashboardWithData();}}catch(e){console.error('Load error:',e);}}
-async function saveToServer(){try{const data=encodeURIComponent(JSON.stringify(S.q));const url=API_URL+'?action=saveQueue&data='+data+'&warehouse='+encodeURIComponent(S.userWH||'');await fetch(url);}catch(e){console.error('Save error:',e);}}
+
+// FIX: Coba POST dulu, fallback ke GET
+async function saveToServer(){try{const fd=new URLSearchParams();fd.append('action','saveQueue');fd.append('data',JSON.stringify(S.q));fd.append('warehouse',S.userWH||'');const r=await fetch(API_URL,{method:'POST',body:fd});if(!r.ok)throw new Error('POST failed');}catch(e){try{const data=encodeURIComponent(JSON.stringify(S.q));const url=API_URL+'?action=saveQueue&data='+data+'&warehouse='+encodeURIComponent(S.userWH||'');await fetch(url);}catch(e2){console.error('Save error:',e2);}}}
+
 async function refreshAll(){await loadFromServer();toast('🔄','Data disegarkan','ok');}
 function startAutoSync(){stopAutoSync();S.syncInterval=setInterval(()=>{loadFromServer();},5000);}
 function stopAutoSync(){if(S.syncInterval){clearInterval(S.syncInterval);S.syncInterval=null;}}
@@ -87,7 +90,7 @@ function updRev(){const tbody=document.getElementById('revBody');if(!tbody)retur
 function updCards(){const t0=document.getElementById('t0');if(t0)t0.textContent=S.q.length;const t1=document.getElementById('t1');if(t1)t1.textContent=S.q.filter(p=>p.status==='draft').length;const t2=document.getElementById('t2');if(t2)t2.textContent=S.q.filter(p=>p.status==='proses').length;const t3=document.getElementById('t3');if(t3)t3.textContent=S.q.filter(p=>p.status==='selesai'||p.status==='handover').length;}
 
 // ============================================
-// INPUT (LANGSUNG SAVE + LOAD)
+// INPUT
 // ============================================
 function addChk(){const n=document.getElementById('chkIn').value.trim();if(!n||S.chk.includes(n))return;S.chk.push(n);renderChk();document.getElementById('chkIn').value='';}
 function delChk(i){S.chk.splice(i,1);renderChk();}
