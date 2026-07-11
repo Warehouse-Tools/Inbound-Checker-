@@ -13,7 +13,7 @@
 <body>
 <div class="toast-ctr" id="toastCtr"></div>
 <div class="login-screen" id="loginScreen">
-    <div class="login-box"><h2>🔐 Inbound Checker v5.0</h2><p>Production | All WH</p>
+    <div class="login-box"><h2>🔐 Inbound Checker v5.0</h2><p>Production | Stable</p>
         <input type="text" id="loginUser" placeholder="Username"><input type="password" id="loginPass" placeholder="Password">
         <div id="loginStatus" style="display:none;color:#1565c0;margin-top:10px"><span class="loading-text">⏳ Memeriksa...</span></div>
         <div class="login-error" id="loginError"></div><button class="btn-login" id="btnLogin" onclick="doLogin()">🚀 Masuk</button>
@@ -57,6 +57,7 @@ async function doLogin(){if(isLoggingIn)return;isLoggingIn=true;const u=document
 function doLogout(){stopAutoSync();stopTimers();localStorage.removeItem('inbound_session_mu');S.loggedIn=false;document.getElementById('mainApp').classList.remove('show');document.getElementById('loginScreen').style.display='flex';}
 
 async function loadFromServer(){try{const r=await fetch(API_URL+'?action=getQueue&warehouse='+encodeURIComponent(S.userWH||''));const d=await r.json();if(d&&Array.isArray(d)&&d.length>0){S.q=d;saveLocal();updRev();updCards();updateDashboardWithData();}}catch(e){}}
+async function saveToServer(){try{const fd=new URLSearchParams();fd.append('action','saveQueue');fd.append('data',JSON.stringify(S.q));fd.append('warehouse',S.userWH||'');await fetch(API_URL,{method:'POST',body:fd});}catch(e){}}
 function startAutoSync(){stopAutoSync();}
 function stopAutoSync(){if(S.syncInterval){clearInterval(S.syncInterval);S.syncInterval=null;}}
 
