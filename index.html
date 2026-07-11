@@ -57,7 +57,7 @@ async function doLogin(){if(isLoggingIn)return;isLoggingIn=true;const u=document
 function doLogout(){stopAutoSync();stopTimers();localStorage.removeItem('inbound_session_mu');S.loggedIn=false;document.getElementById('mainApp').classList.remove('show');document.getElementById('loginScreen').style.display='flex';}
 
 async function loadFromServer(){try{const r=await fetch(API_URL+'?action=getQueue&warehouse='+encodeURIComponent(S.userWH||''));const d=await r.json();if(d&&Array.isArray(d)&&d.length>0){S.q=d;saveLocal();updRev();updCards();updateDashboardWithData();toast('🔄','Data disinkronkan ('+d.length+' PO)','ok');}else{toast('📭','Server kosong','warn');}}catch(e){toast('❌','Gagal sync','err');}}
-async function saveToServer(){try{const data=encodeURIComponent(JSON.stringify(S.q));const url=API_URL+'?action=saveQueue&data='+data+'&warehouse='+encodeURIComponent(S.userWH||'');await fetch(url);return true;}catch(e){return false;}}
+async function saveToServer(){try{const fd=new URLSearchParams();fd.append('action','saveQueue');fd.append('data',JSON.stringify(S.q));fd.append('warehouse',S.userWH||'');await fetch(API_URL,{method:'POST',body:fd});}catch(e){}}
 function startAutoSync(){stopAutoSync();S.syncInterval=setInterval(()=>{loadFromServer();},5000);}
 function stopAutoSync(){if(S.syncInterval){clearInterval(S.syncInterval);S.syncInterval=null;}}
 
